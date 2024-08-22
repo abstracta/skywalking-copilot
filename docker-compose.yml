@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: skywalking_copilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+  migrations:
+    build: .
+    environment:
+      DB_URL: "postgresql+psycopg://postgres:admin@postgres/skywalking_copilot"
+      OPENID_URL: ""
+    env_file: .env
+    command: ["poetry", "run", "alembic", "upgrade", "head"]
+volumes:
+  postgres-data:

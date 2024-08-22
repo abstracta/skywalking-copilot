@@ -1,0 +1,3 @@
+[submodule "browser-copilot"]
+	path = browser-copilot
+	url = https://github.com/abstracta/browser-copilot

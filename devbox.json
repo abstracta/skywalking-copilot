@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.12.0/.schema/devbox.schema.json",
+  "packages": [
+    "python@latest",
+    "poetry@latest",
+    "nodejs@latest",
+    "nodePackages.pnpm@latest"
+  ],
+  "env": {
+    "START_URL": "http://localhost:9091/index.html"
+  },
+  "shell": {
+    "scripts": {
+      "postgres": [
+        "docker compose up --build postgres migrations"
+      ],
+      "new-migration": [
+        "[[ -n $1 ]] || (echo 'Missing revision message!' && exit 1)",
+        "poetry run alembic revision --autogenerate -m \"$1\""
+      ],
+      "migrations": [
+        "poetry run alembic upgrade head"
+      ],
+      "agent": [
+        "poetry run python -m skywalking_copilot 0"
+      ],
+      "browser": [
+        "pnpm --dir browser-copilot/browser-extension dev"
+      ],
+      "update-git": [
+        "git submodule update --recursive --remote"
+      ],
+      "update-deps": [
+        "poetry update"
+      ],
+      "install": [
+        "pnpm --dir browser-copilot/browser-extension install",
+        "poetry install",
+        "[ -e '.env' ] || (cp sample.env .env && echo '.env file has been created, PLEASE CHECK THAT ALL PROPERTIES ARE PROPERLY SET!')"
+      ]
+    }
+  }
+}

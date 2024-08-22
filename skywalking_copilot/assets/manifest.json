@@ -1,0 +1,22 @@
+{
+  "id": "skywalking",
+  "name": "Skywalking",
+  "welcomeMessage": "Hello, I am your Skywalking copilot!\n\nAsk me information about information collected by skywalking for this app like services metrics, traces, etc. Check the already defined prompts for some examples.",
+  "prompts": [
+    { "name" : "services", "text" : "list services general metrics" }
+  ],
+  "contactEmail": "{{ support_email}}",
+  "onHttpRequest": [
+    {
+      "condition": {
+        "urlRegex": "{{ app_url }}"
+      },
+      "actions": [
+        {
+          "activate": {
+          }
+        }
+      ]
+    }
+  ]
+}
