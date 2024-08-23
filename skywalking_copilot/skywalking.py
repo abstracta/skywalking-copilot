@@ -14,10 +14,6 @@ class Service(BaseModel):
     normal: bool
     shortName: str
 
-    @staticmethod
-    def from_graphql(data: dict) -> 'Service':
-        return Service(**data)
-
 
 class DurationStep(Enum):
     MINUTE = "MINUTE"
@@ -31,6 +27,35 @@ class ServiceMetrics(BaseModel):
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
+
+
+class TopologyNode(BaseModel):
+    id: str
+    name: str
+    type: Optional[str]
+
+    @staticmethod
+    def from_graphql(data: dict) -> 'TopologyNode':
+        return TopologyNode(**data)
+
+
+class TopologyEdge(BaseModel):
+    source: str
+    target: str
+
+    @staticmethod
+    def from_graphql(data: dict) -> 'TopologyEdge':
+        return TopologyEdge(**data)
+
+
+class Topology(BaseModel):
+    nodes: List[TopologyNode]
+    edges: List[TopologyEdge]
+
+    @staticmethod
+    def from_graphql(data: dict) -> 'Topology':
+        return Topology(nodes=[TopologyNode.from_graphql(node) for node in data['nodes']],
+                        edges=[TopologyEdge.from_graphql(edge) for edge in data['calls']])
 
 
 class SkywalkingApi:
@@ -47,8 +72,7 @@ class SkywalkingApi:
         await self._client.close_async()
 
     async def find_services(self) -> List[Service]:
-        query = gql(
-            """
+        result = await self._query("""
             query listServices {
               services: listServices(layer: "GENERAL") {
                 id
@@ -57,45 +81,41 @@ class SkywalkingApi:
                 shortName
               }
             }
-        """
-        )
-        result = await self._client.session.execute(query)
-        return [Service.from_graphql(service) for service in result['services']]
+        """)
+        return [Service(**service) for service in result['services']]
 
-    async def find_general_services_metrics(self, services: List[Service], start_time: datetime, end_time: datetime) -> Dict[str, ServiceMetrics]:
+    async def _query(self, query: str) -> dict:
+        return await self._client.session.execute(gql(query))
+
+    async def find_services_metrics(self,
+            services: List[Service], start_time: datetime, end_time: datetime) -> Dict[str, ServiceMetrics]:
         expressions = {
             "cpm": "avg(service_cpm)",
             "sla": "avg(service_sla)/100",
             "resp_time": "avg(service_resp_time)",
             "apdex": "avg(service_apdex)/10000",
         }
-        duration = {
-            "start": start_time.strftime("%Y-%m-%d %H%M"),
-            "end": end_time.strftime("%Y-%m-%d %H%M"),
-            "step": DurationStep.MINUTE
-        }
-        duration_val = self._val_to_gql(duration)
+        duration = self._duration_from_limits(start_time, end_time)
         queries = []
         for service in services:
             entity_val = f"{{serviceName: \"{service.name}\", normal: {'true' if service.normal else 'false'}}}"
             for metric_name, expression in expressions.items():
                 queries.append(f"""
-                {service.shortName}_{metric_name}: execExpression(expression: \"{expression}\", entity: {entity_val}, duration: {duration_val}) {{
-                    results {{
-                        values {{
-                            value
+                    {service.shortName}_{metric_name}: execExpression(expression: \"{expression}\", 
+                    entity: {entity_val}, duration: {duration}) {{
+                        results {{
+                            values {{
+                                value
+                            }}
                         }}
+                        error
                     }}
-                    error
-                }}
-""")
-        result = await self._client.session.execute(gql(
-            f"""
+                """)
+        result = await self._query(f"""
             query queryMetrics {{
               {'\n'.join(queries)}
             }}
-        """
-        ))
+        """)
         ret = {}
         for metric_name, metric_val in result.items():
             if metric_val['error']:
@@ -107,6 +127,14 @@ class SkywalkingApi:
             service_metrics[name_parts[1]] = value
             ret[name_parts[0]] = service_metrics
         return ret
+
+    def _duration_from_limits(self, start_time: datetime, end_time: datetime) -> str:
+        duration = {
+            "start": start_time.strftime("%Y-%m-%d %H%M"),
+            "end": end_time.strftime("%Y-%m-%d %H%M"),
+            "step": DurationStep.MINUTE
+        }
+        return self._val_to_gql(duration)
 
     def _val_to_gql(self, data: any) -> str:
         if isinstance(data, str):
@@ -122,3 +150,22 @@ class SkywalkingApi:
         else:
             return str(data)
 
+    async def find_services_topology(
+            self, services: List[Service], start_time: datetime, end_time: datetime) -> Topology:
+        duration = self._duration_from_limits(start_time, end_time)
+        service_ids = self._val_to_gql([service.id for service in services])
+        result = await self._query(f"""
+            query queryTopology {{
+              topology: getServicesTopology(duration: {duration}, serviceIds: {service_ids}) {{
+                nodes {{
+                  id
+                  name
+                  type
+                }}
+                calls {{
+                  source
+                  target
+                }}
+              }}
+            }}""")
+        return Topology.from_graphql(result['topology'])

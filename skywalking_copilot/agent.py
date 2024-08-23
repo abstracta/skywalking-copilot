@@ -1,7 +1,9 @@
 import asyncio
 import datetime
+import logging
 import os
-from typing import List, AsyncIterator, Dict, Optional, Any
+import re
+from typing import List, AsyncIterator, Dict, Optional, Any, Tuple
 from uuid import UUID
 
 from langchain.agents import Tool, AgentExecutor, create_openai_functions_agent
@@ -18,15 +20,45 @@ from psycopg import AsyncConnection
 
 from skywalking_copilot.database import CHAT_HISTORY_TABLE
 from skywalking_copilot.domain import Session
-from skywalking_copilot.skywalking import SkywalkingApi, ServiceMetrics
+from skywalking_copilot.skywalking import SkywalkingApi, ServiceMetrics, Topology, TopologyNode
+
+logging.getLogger("openai").level = logging.DEBUG
 
 
 def _metrics_to_markdown(service_metrics: Dict[str, ServiceMetrics]) -> str:
     return ("""| Service | Load (calls/min) | Success Rate (%) | Latency (ms) | Apdex |
 |---|---|---|---|---|
-""" + "\n".join(
-                [f"|{service}|{metrics.cpm}|{metrics.sla}|{metrics.resp_time}|{metrics.apdex}|" for service, metrics in
-                 service_metrics.items()]))
+""" + "\n".join(f"|{service}|{metrics.cpm}|{metrics.sla}|{metrics.resp_time}|{metrics.apdex}|" for service, metrics in
+                service_metrics.items()))
+
+
+def _topology_to_markdown(topology: Topology) -> str:
+    node_ids = {}
+    nodes_plantuml = []
+    for index, node in enumerate(topology.nodes):
+        if node.type == "USER":
+            continue
+        node_id, node_plantuml = _node_to_plantuml(node, index)
+        node_ids[node.id] = node_id
+        nodes_plantuml.append(node_plantuml)
+    return f"""@startuml
+scale 0.75
+
+{'\n'.join(nodes_plantuml)}
+{'\n'.join(f"{node_ids[edge.source]} --> {node_ids[edge.target]}" for edge in topology.edges if node_ids.get(edge.source))}
+@enduml
+"""
+
+
+def _node_to_plantuml(node: TopologyNode, node_index: int) -> Tuple[str, str]:
+    node_id = node.name
+    if re.search(r"\W", node_id):
+        node_id = f"{node.type.lower() if node.type else 'node'}{node_index}"
+    node_types = {
+        "ActiveMQ": "queue",
+        "H2": "database"
+    }
+    return node_id, f"{node_types.get(node.type, 'agent')} {node_id}" + (f" <<{node.type}>>" if node.type else "") + (f" as \"{node.name}\"" if node_id != node.name else "")
 
 
 class Agent:
@@ -39,19 +71,31 @@ class Agent:
         tools = [
             Tool.from_function(
                 name="services_metrics",
-                description="gets the service metrics collected in Skywalking for the last 10 minutes",
-                coroutine=self._find_services_metrics,
+                description="gets the service metrics collected in the last 10 minutes",
+                coroutine=self._get_services_metrics,
+                func=None,
+                return_direct=True),
+            Tool.from_function(
+                name="services_topology",
+                description="gets a diagram with the topology of services showing how are they connected. "
+                            "This information is based on the calls made between services in the last 10 minutes",
+                coroutine=self._get_services_topology,
                 func=None,
                 return_direct=True)
         ]
         self._agent = self._build_agent(self._llm, self._memory, tools)
 
-    async def _find_services_metrics(self, _) -> str:
+    async def _get_services_metrics(self, _) -> str:
         services = await self._sw_api.find_services()
         now = datetime.datetime.now(datetime.UTC)
-        service_metrics = await self._sw_api.find_general_services_metrics(services,
-                                                                           now - datetime.timedelta(minutes=10), now)
+        service_metrics = await self._sw_api.find_services_metrics(services, now - datetime.timedelta(minutes=10), now)
         return _metrics_to_markdown(service_metrics)
+
+    async def _get_services_topology(self, _) -> str:
+        services = await self._sw_api.find_services()
+        now = datetime.datetime.now(datetime.UTC)
+        topology = await self._sw_api.find_services_topology(services, now - datetime.timedelta(minutes=10), now)
+        return _topology_to_markdown(topology)
 
     @staticmethod
     def _build_llm():
