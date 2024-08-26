@@ -1,0 +1,34 @@
+@startuml
+scale 0.75
+!define LINE_COLOR #7c3aed
+!define LINE_THICKNESS 2
+!define BACKGROUND_COLOR #ece6f5
+
+skinparam {
+    AgentBorderColor LINE_COLOR
+    AgentBorderThickness LINE_THICKNESS
+    AgentBackgroundColor BACKGROUND_COLOR
+    AgentFontStyle bold
+    AgentStereotypeFontStyle normal
+    DatabaseBorderColor LINE_COLOR
+    DatabaseBorderThickness LINE_THICKNESS
+    DatabaseBackgroundColor BACKGROUND_COLOR
+    DatabaseFontStyle bold
+    DatabaseStereotypeFontStyle normal
+    QueueBorderColor LINE_COLOR
+    QueueBorderThickness LINE_THICKNESS
+    QueueBackgroundColor BACKGROUND_COLOR
+    QueueFontStyle bold
+    QueueStereotypeFontStyle normal
+    ArrowColor LINE_COLOR
+    ArrowThickness LINE_THICKNESS
+    ArrowFontColor LINE_COLOR
+}
+
+{% set node_types = { "ActiveMQ": "queue", "H2": "database" } %}
+{% for node_id, node in nodes.items() %}{{ node_types.get(node.type, 'agent') }} {{ node_id }}{% if node.type %} <<{{ node.type }}>>{% endif %}{% if node_id != node.name %} as "{{ node.name }}"{% endif %}
+{% endfor %}
+
+{% for src, tgt in edges %}{{ src }} --> {{ tgt }}
+{% endfor %}
+@enduml

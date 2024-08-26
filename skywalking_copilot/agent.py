@@ -3,9 +3,10 @@ import datetime
 import logging
 import os
 import re
-from typing import List, AsyncIterator, Dict, Optional, Any, Tuple
+from typing import List, AsyncIterator, Dict, Optional, Any
 from uuid import UUID
 
+from jinja2 import Environment, FileSystemLoader
 from langchain.agents import Tool, AgentExecutor, create_openai_functions_agent
 from langchain.callbacks import AsyncIteratorCallbackHandler
 from langchain.memory import ConversationBufferMemory
@@ -20,45 +21,33 @@ from psycopg import AsyncConnection
 
 from skywalking_copilot.database import CHAT_HISTORY_TABLE
 from skywalking_copilot.domain import Session
-from skywalking_copilot.skywalking import SkywalkingApi, ServiceMetrics, Topology, TopologyNode
+from skywalking_copilot.skywalking import SkywalkingApi, ServiceMetrics, Topology
 
 logging.getLogger("openai").level = logging.DEBUG
+assets_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
+templates_repo = Environment(loader=FileSystemLoader(assets_path))
 
 
 def _metrics_to_markdown(service_metrics: Dict[str, ServiceMetrics]) -> str:
-    return ("""| Service | Load (calls/min) | Success Rate (%) | Latency (ms) | Apdex |
-|---|---|---|---|---|
-""" + "\n".join(f"|{service}|{metrics.cpm}|{metrics.sla}|{metrics.resp_time}|{metrics.apdex}|" for service, metrics in
-                service_metrics.items()))
+    return templates_repo.get_template("services-metrics-template.md").render(service_metrics=service_metrics)
 
 
 def _topology_to_markdown(topology: Topology) -> str:
     node_ids = {}
-    nodes_plantuml = []
+    nodes = {}
+    edges = []
     for index, node in enumerate(topology.nodes):
         if node.type == "USER":
             continue
-        node_id, node_plantuml = _node_to_plantuml(node, index)
+        node_id = node.name
+        if re.search(r"\W", node_id):
+            node_id = f"{node.type.lower() if node.type else 'node'}{index}"
         node_ids[node.id] = node_id
-        nodes_plantuml.append(node_plantuml)
-    return f"""@startuml
-scale 0.75
-
-{'\n'.join(nodes_plantuml)}
-{'\n'.join(f"{node_ids[edge.source]} --> {node_ids[edge.target]}" for edge in topology.edges if node_ids.get(edge.source))}
-@enduml
-"""
-
-
-def _node_to_plantuml(node: TopologyNode, node_index: int) -> Tuple[str, str]:
-    node_id = node.name
-    if re.search(r"\W", node_id):
-        node_id = f"{node.type.lower() if node.type else 'node'}{node_index}"
-    node_types = {
-        "ActiveMQ": "queue",
-        "H2": "database"
-    }
-    return node_id, f"{node_types.get(node.type, 'agent')} {node_id}" + (f" <<{node.type}>>" if node.type else "") + (f" as \"{node.name}\"" if node_id != node.name else "")
+        nodes[node_id] = node
+    for edge in topology.edges:
+        if node_ids.get(edge.source):
+            edges.append((node_ids[edge.source], node_ids[edge.target]))
+    return templates_repo.get_template("topology-diagram-template.puml").render(nodes=nodes, edges=edges, re=re)
 
 
 class Agent:
