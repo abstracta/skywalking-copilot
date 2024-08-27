@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+import datetime
 from enum import Enum
 from typing import List, Optional, Dict
 
@@ -17,6 +17,40 @@ class Service(BaseModel):
 
 class DurationStep(Enum):
     MINUTE = "MINUTE"
+
+
+class TimeRange(BaseModel):
+    start: datetime
+    end: datetime
+    step: DurationStep
+
+    @staticmethod
+    def from_last_minutes(minutes: int) -> 'TimeRange':
+        now = datetime.datetime.now(datetime.UTC)
+        return TimeRange(start=now - datetime.timedelta(minutes=minutes), end=now, step=DurationStep.MINUTE)
+
+    def to_gql(self) -> str:
+        duration = {
+            "start": self.start.strftime("%Y-%m-%d %H%M"),
+            "end": self.end.strftime("%Y-%m-%d %H%M"),
+            "step": self.step
+        }
+        return _val_to_gql(duration)
+
+
+def _val_to_gql(data: any) -> str:
+    if isinstance(data, str):
+        return f'"{data.replace("\\", "\\\\").replace("\n", "\\n").replace("\"", "\\\"")}"'
+    elif isinstance(data, bool):
+        return "true" if data else "false"
+    elif isinstance(data, dict):
+        return f"{{{', '.join([f'{key}: {_val_to_gql(val)}' for key, val in data.items()])}}}"
+    elif isinstance(data, list):
+        return f"[{', '.join([_val_to_gql(val) for val in data])}]"
+    elif isinstance(data, Enum):
+        return data.value
+    else:
+        return str(data)
 
 
 class ServiceMetrics(BaseModel):
@@ -87,16 +121,15 @@ class SkywalkingApi:
     async def _query(self, query: str) -> dict:
         return await self._client.session.execute(gql(query))
 
-    async def find_services_metrics(self,
-            services: List[Service], start_time: datetime, end_time: datetime) -> Dict[str, ServiceMetrics]:
+    async def find_services_metrics(self, services: List[Service], time_range: TimeRange) -> Dict[str, ServiceMetrics]:
         expressions = {
             "cpm": "avg(service_cpm)",
             "sla": "avg(service_sla)/100",
             "resp_time": "avg(service_resp_time)",
             "apdex": "avg(service_apdex)/10000",
         }
-        duration = self._duration_from_limits(start_time, end_time)
         queries = []
+        duration = time_range.to_gql()
         for service in services:
             entity_val = f"{{serviceName: \"{service.name}\", normal: {'true' if service.normal else 'false'}}}"
             for metric_name, expression in expressions.items():
@@ -128,32 +161,9 @@ class SkywalkingApi:
             ret[name_parts[0]] = service_metrics
         return ret
 
-    def _duration_from_limits(self, start_time: datetime, end_time: datetime) -> str:
-        duration = {
-            "start": start_time.strftime("%Y-%m-%d %H%M"),
-            "end": end_time.strftime("%Y-%m-%d %H%M"),
-            "step": DurationStep.MINUTE
-        }
-        return self._val_to_gql(duration)
-
-    def _val_to_gql(self, data: any) -> str:
-        if isinstance(data, str):
-            return f'"{data.replace("\\", "\\\\").replace("\n", "\\n").replace("\"", "\\\"")}"'
-        elif isinstance(data, bool):
-            return "true" if data else "false"
-        elif isinstance(data, dict):
-            return f"{{{', '.join([f'{key}: {self._val_to_gql(val)}' for key, val in data.items()])}}}"
-        elif isinstance(data, list):
-            return f"[{', '.join([self._val_to_gql(val) for val in data])}]"
-        elif isinstance(data, Enum):
-            return data.value
-        else:
-            return str(data)
-
-    async def find_services_topology(
-            self, services: List[Service], start_time: datetime, end_time: datetime) -> Topology:
-        duration = self._duration_from_limits(start_time, end_time)
-        service_ids = self._val_to_gql([service.id for service in services])
+    async def find_services_topology(self, services: List[Service], time_range: TimeRange) -> Topology:
+        duration = time_range.to_gql()
+        service_ids = _val_to_gql([service.id for service in services])
         result = await self._query(f"""
             query queryTopology {{
               topology: getServicesTopology(duration: {duration}, serviceIds: {service_ids}) {{

@@ -21,7 +21,7 @@ from psycopg import AsyncConnection
 
 from skywalking_copilot.database import CHAT_HISTORY_TABLE
 from skywalking_copilot.domain import Session
-from skywalking_copilot.skywalking import SkywalkingApi, ServiceMetrics, Topology
+from skywalking_copilot.skywalking import SkywalkingApi, ServiceMetrics, Topology, TimeRange
 
 logging.getLogger("openai").level = logging.DEBUG
 assets_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
@@ -76,14 +76,12 @@ class Agent:
 
     async def _get_services_metrics(self, _) -> str:
         services = await self._sw_api.find_services()
-        now = datetime.datetime.now(datetime.UTC)
-        service_metrics = await self._sw_api.find_services_metrics(services, now - datetime.timedelta(minutes=10), now)
+        service_metrics = await self._sw_api.find_services_metrics(services, TimeRange.from_last_minutes(10))
         return _metrics_to_markdown(service_metrics)
 
     async def _get_services_topology(self, _) -> str:
         services = await self._sw_api.find_services()
-        now = datetime.datetime.now(datetime.UTC)
-        topology = await self._sw_api.find_services_topology(services, now - datetime.timedelta(minutes=10), now)
+        topology = await self._sw_api.find_services_topology(services, TimeRange.from_last_minutes(10))
         return _topology_to_markdown(topology)
 
     @staticmethod
