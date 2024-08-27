@@ -20,8 +20,8 @@ class DurationStep(Enum):
 
 
 class TimeRange(BaseModel):
-    start: datetime
-    end: datetime
+    start: datetime.datetime
+    end: datetime.datetime
     step: DurationStep
 
     @staticmethod
@@ -53,7 +53,7 @@ def _val_to_gql(data: any) -> str:
         return str(data)
 
 
-class ServiceMetrics(BaseModel):
+class ServiceSummaryMetrics(BaseModel):
     cpm: Optional[float] = None
     sla: Optional[float] = None
     resp_time: Optional[float] = None
@@ -121,7 +121,8 @@ class SkywalkingApi:
     async def _query(self, query: str) -> dict:
         return await self._client.session.execute(gql(query))
 
-    async def find_services_metrics(self, services: List[Service], time_range: TimeRange) -> Dict[str, ServiceMetrics]:
+    async def find_services_metrics(self, services: List[Service], time_range: TimeRange) \
+            -> Dict[str, ServiceSummaryMetrics]:
         expressions = {
             "cpm": "avg(service_cpm)",
             "sla": "avg(service_sla)/100",
@@ -156,7 +157,7 @@ class SkywalkingApi:
                 continue
             value = metric_val['results'][0]['values'][0]['value']
             name_parts = metric_name.split('_', 1)
-            service_metrics = ret.get(name_parts[0], ServiceMetrics())
+            service_metrics = ret.get(name_parts[0], ServiceSummaryMetrics())
             service_metrics[name_parts[1]] = value
             ret[name_parts[0]] = service_metrics
         return ret

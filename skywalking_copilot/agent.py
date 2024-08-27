@@ -1,17 +1,15 @@
 import asyncio
-import datetime
 import logging
 import os
-import re
 from typing import List, AsyncIterator, Dict, Optional, Any
 from uuid import UUID
 
-from jinja2 import Environment, FileSystemLoader
-from langchain.agents import Tool, AgentExecutor, create_openai_functions_agent
+from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain.callbacks import AsyncIteratorCallbackHandler
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import MessagesPlaceholder, ChatPromptTemplate, HumanMessagePromptTemplate
 from langchain.schema import SystemMessage
+from langchain.tools import BaseTool
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import AzureChatOpenAI
@@ -19,35 +17,12 @@ from langchain_openai.chat_models.base import BaseChatOpenAI
 from langchain_postgres import PostgresChatMessageHistory
 from psycopg import AsyncConnection
 
+from skywalking_copilot.agent_tools import ServicesMetricsTool, ServicesTopologyTool
 from skywalking_copilot.database import CHAT_HISTORY_TABLE
 from skywalking_copilot.domain import Session
-from skywalking_copilot.skywalking import SkywalkingApi, ServiceMetrics, Topology, TimeRange
+from skywalking_copilot.skywalking import SkywalkingApi
 
 logging.getLogger("openai").level = logging.DEBUG
-assets_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
-templates_repo = Environment(loader=FileSystemLoader(assets_path))
-
-
-def _metrics_to_markdown(service_metrics: Dict[str, ServiceMetrics]) -> str:
-    return templates_repo.get_template("services-metrics-template.md").render(service_metrics=service_metrics)
-
-
-def _topology_to_markdown(topology: Topology) -> str:
-    node_ids = {}
-    nodes = {}
-    edges = []
-    for index, node in enumerate(topology.nodes):
-        if node.type == "USER":
-            continue
-        node_id = node.name
-        if re.search(r"\W", node_id):
-            node_id = f"{node.type.lower() if node.type else 'node'}{index}"
-        node_ids[node.id] = node_id
-        nodes[node_id] = node
-    for edge in topology.edges:
-        if node_ids.get(edge.source):
-            edges.append((node_ids[edge.source], node_ids[edge.target]))
-    return templates_repo.get_template("topology-diagram-template.puml").render(nodes=nodes, edges=edges, re=re)
 
 
 class Agent:
@@ -56,33 +31,11 @@ class Agent:
         self._session = session
         self._llm = self._build_llm()
         self._memory = self._build_memory(session.id, db)
-        self._sw_api = sw_api
-        tools = [
-            Tool.from_function(
-                name="services_metrics",
-                description="gets the service metrics collected in the last 10 minutes",
-                coroutine=self._get_services_metrics,
-                func=None,
-                return_direct=True),
-            Tool.from_function(
-                name="services_topology",
-                description="gets a diagram with the topology of services showing how are they connected. "
-                            "This information is based on the calls made between services in the last 10 minutes",
-                coroutine=self._get_services_topology,
-                func=None,
-                return_direct=True)
+        tools: List[BaseTool] = [
+            ServicesMetricsTool(sw_api=sw_api),
+            ServicesTopologyTool(sw_api=sw_api)
         ]
         self._agent = self._build_agent(self._llm, self._memory, tools)
-
-    async def _get_services_metrics(self, _) -> str:
-        services = await self._sw_api.find_services()
-        service_metrics = await self._sw_api.find_services_metrics(services, TimeRange.from_last_minutes(10))
-        return _metrics_to_markdown(service_metrics)
-
-    async def _get_services_topology(self, _) -> str:
-        services = await self._sw_api.find_services()
-        topology = await self._sw_api.find_services_topology(services, TimeRange.from_last_minutes(10))
-        return _topology_to_markdown(topology)
 
     @staticmethod
     def _build_llm():
@@ -95,7 +48,8 @@ class Agent:
         message_history = PostgresChatMessageHistory(CHAT_HISTORY_TABLE, str(session_id), async_connection=db)
         return ConversationBufferMemory(memory_key="chat_history", chat_memory=message_history, return_messages=True)
 
-    def _build_agent(self, llm: BaseChatOpenAI, memory: ConversationBufferMemory, tools: List[Tool]) -> AgentExecutor:
+    def _build_agent(
+            self, llm: BaseChatOpenAI, memory: ConversationBufferMemory, tools: List[BaseTool]) -> AgentExecutor:
         prompt = ChatPromptTemplate(messages=[
             SystemMessage(content=self._read_file("system-prompt.md")),
             MessagesPlaceholder(variable_name=memory.memory_key),
