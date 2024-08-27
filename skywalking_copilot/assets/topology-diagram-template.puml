@@ -25,10 +25,15 @@ skinparam {
     ArrowFontColor LINE_COLOR
 }
 
-{% set node_types = { "ActiveMQ": "queue", "H2": "database" } %}
-{% for node_id, node in nodes.items() %}{{ node_types.get(node.type, 'agent') }} {{ node_id }}{% if node.type %} <<{{ node.type }}>>{% endif %}{% if node_id != node.name %} as "{{ node.name }}"{% endif %}
+{% set node_types = { 
+  "ActiveMQ": "queue", 
+  "H2": "database" } 
+%}
+{% for node_id, node in nodes.items() -%}
+{{ node_types.get(node.type, 'agent') }} {{ node_id }}{% if node.type %} <<{{ node.type }}>>{% endif %}{% if node_id != node.name %} as "{{ node.name }}"{% endif %}
 {% endfor %}
 
-{% for src, tgt in edges %}{{ src }} --> {{ tgt }}
+{% for src, tgt in edges -%}
+{{ src }} --> {{ tgt }}
 {% endfor %}
 @enduml

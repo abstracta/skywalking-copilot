@@ -63,7 +63,15 @@ To try the copilot locally you can try running [Skywalking showcase](https://sky
 
 The steps to run Skywalking showcase locally:
 * clone the repository `https://github.com/apache/skywalking-showcase.git`
-* modify `deploy/platform/docker/scripts/docker-compose.agent.yaml` by adding port mapping `9091:80` to frontend service. This allows to access the frontend later on and try the copilot with it. 
+* modify `deploy/platform/docker/scripts/docker-compose.agent.yaml` by adding port mapping `9091:80` to frontend service. This allows to access the frontend later on and try the copilot with it.
+* if you want to tune showcase memory consumption you can modify `deploy/platform/docker/scripts/docker-compose.agent.yaml` adding following section to both `songs` and `gateway` services:  
+  ```yaml
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+  ```
+  Additionally, you can add the same section but configured with `2G` to `oap` service in `deploy/platform/docker/scripts/docker-compose.single-node.yaml`.
 * Run on `make deploy.docker FEATURE_FLAGS=single-node,agent`. This wills spin up showcase sample services and skwyalking server, frontend and database. Here is a diagram of deployed infrastrcuture:
 
 ```plantuml
