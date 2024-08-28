@@ -4,7 +4,8 @@
   "welcomeMessage": "Hello, I am your Skywalking copilot!\n\nAsk me information about information collected by skywalking for this app like services metrics, traces, etc. Check the already defined prompts for some examples.",
   "prompts": [
     { "name" : "services", "text" : "list services general metrics" },
-    { "name" : "topology", "text" : "get a diagram of the topology of the services" }
+    { "name" : "topology", "text" : "get a diagram of the topology of the services" },
+    { "name" : "response time", "text" : "generate a response time chart for service ${input}" }
   ],
   "contactEmail": "{{ support_email}}",
   "onHttpRequest": [

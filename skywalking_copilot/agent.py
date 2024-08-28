@@ -17,7 +17,7 @@ from langchain_openai.chat_models.base import BaseChatOpenAI
 from langchain_postgres import PostgresChatMessageHistory
 from psycopg import AsyncConnection
 
-from skywalking_copilot.agent_tools import ServicesMetricsTool, ServicesTopologyTool
+from skywalking_copilot.agent_tools import ServicesMetricsTool, ServicesTopologyTool, ServiceMetricChartTool
 from skywalking_copilot.database import CHAT_HISTORY_TABLE
 from skywalking_copilot.domain import Session
 from skywalking_copilot.skywalking import SkywalkingApi
@@ -33,7 +33,8 @@ class Agent:
         self._memory = self._build_memory(session.id, db)
         tools: List[BaseTool] = [
             ServicesMetricsTool(sw_api=sw_api),
-            ServicesTopologyTool(sw_api=sw_api)
+            ServicesTopologyTool(sw_api=sw_api),
+            ServiceMetricChartTool(sw_api=sw_api),
         ]
         self._agent = self._build_agent(self._llm, self._memory, tools)
 

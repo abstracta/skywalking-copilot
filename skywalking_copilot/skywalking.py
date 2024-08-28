@@ -7,12 +7,32 @@ from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
 from pydantic import BaseModel
 
+from skywalking_copilot.templates import solve_template
+
 
 class Service(BaseModel):
     id: str
     name: str
     normal: bool
     shortName: str
+
+    def to_gql(self) -> str:
+        return _val_to_gql({"serviceName": self.name, "normal": self.normal})
+
+
+def _val_to_gql(data: any) -> str:
+    if isinstance(data, str):
+        return f'"{data.replace("\\", "\\\\").replace("\n", "\\n").replace("\"", "\\\"")}"'
+    elif isinstance(data, bool):
+        return "true" if data else "false"
+    elif isinstance(data, dict):
+        return f"{{{', '.join([f'{key}: {_val_to_gql(val)}' for key, val in data.items()])}}}"
+    elif isinstance(data, list):
+        return f"[{', '.join([_val_to_gql(val) for val in data])}]"
+    elif isinstance(data, Enum):
+        return data.value
+    else:
+        return str(data)
 
 
 class DurationStep(Enum):
@@ -36,21 +56,6 @@ class TimeRange(BaseModel):
             "step": self.step
         }
         return _val_to_gql(duration)
-
-
-def _val_to_gql(data: any) -> str:
-    if isinstance(data, str):
-        return f'"{data.replace("\\", "\\\\").replace("\n", "\\n").replace("\"", "\\\"")}"'
-    elif isinstance(data, bool):
-        return "true" if data else "false"
-    elif isinstance(data, dict):
-        return f"{{{', '.join([f'{key}: {_val_to_gql(val)}' for key, val in data.items()])}}}"
-    elif isinstance(data, list):
-        return f"[{', '.join([_val_to_gql(val) for val in data])}]"
-    elif isinstance(data, Enum):
-        return data.value
-    else:
-        return str(data)
 
 
 class ServiceSummaryMetrics(BaseModel):
@@ -92,6 +97,22 @@ class Topology(BaseModel):
                         edges=[TopologyEdge.from_graphql(edge) for edge in data['calls']])
 
 
+class ServiceMetricValue(BaseModel):
+    id: str
+    value: Optional[str]
+
+
+class ServiceMetric(BaseModel):
+    labels: List[str]
+    values: List[ServiceMetricValue]
+
+    @staticmethod
+    def from_gql(data: dict) -> 'ServiceMetric':
+        return ServiceMetric(
+            labels=[f"{label['key']}{label['value']}" for label in data['metric']['labels']],
+            values=[ServiceMetricValue(**val) for val in data['values']])
+
+
 class SkywalkingApi:
 
     def __init__(self, url: str):
@@ -106,77 +127,67 @@ class SkywalkingApi:
         await self._client.close_async()
 
     async def find_services(self) -> List[Service]:
-        result = await self._query("""
-            query listServices {
-              services: listServices(layer: "GENERAL") {
-                id
-                name
-                normal
-                shortName
-              }
-            }
-        """)
+        result = await self._query(solve_template("list-services-query-template.gql", {}))
         return [Service(**service) for service in result['services']]
 
     async def _query(self, query: str) -> dict:
         return await self._client.session.execute(gql(query))
 
-    async def find_services_metrics(self, services: List[Service], time_range: TimeRange) \
+    async def find_services_summary_metrics(self, services: List[Service], time_range: TimeRange) \
             -> Dict[str, ServiceSummaryMetrics]:
-        expressions = {
+        metrics = {
             "cpm": "avg(service_cpm)",
             "sla": "avg(service_sla)/100",
             "resp_time": "avg(service_resp_time)",
             "apdex": "avg(service_apdex)/10000",
         }
+        result = await self.find_services_metrics(services, metrics, time_range)
+        ret = {}
+        for service_name, service_metrics in result.items():
+            for metric_name, metric_value in service_metrics.items():
+                service_metrics = ret.get(service_name, ServiceSummaryMetrics())
+                service_metrics[metric_name] = metric_value[0].value
+                ret[service_name] = service_metrics
+        return ret
+
+    async def find_services_metrics(self, services: List[Service], metrics: Dict[str, str], time_range: TimeRange) -> \
+            Dict[str, Dict[str, List[ServiceMetric]]]:
+        query = self._build_services_metrics_query(services, metrics, time_range)
+        result = await self._query(query)
+        return self._parse_service_metrics(result)
+
+    @staticmethod
+    def _build_services_metrics_query(services: List[Service], metrics: Dict[str, str], time_range: TimeRange) -> str:
         queries = []
-        duration = time_range.to_gql()
         for service in services:
-            entity_val = f"{{serviceName: \"{service.name}\", normal: {'true' if service.normal else 'false'}}}"
-            for metric_name, expression in expressions.items():
-                queries.append(f"""
-                    {service.shortName}_{metric_name}: execExpression(expression: \"{expression}\", 
-                    entity: {entity_val}, duration: {duration}) {{
-                        results {{
-                            values {{
-                                value
-                            }}
-                        }}
-                        error
-                    }}
-                """)
-        result = await self._query(f"""
+            for metric_name, expression in metrics.items():
+                query = solve_template("service-metric-query-template.gql",
+                                       {"service": service, "metric_name": metric_name, "expression": expression,
+                                        "duration": time_range})
+                queries.append(query)
+        return f"""
             query queryMetrics {{
               {'\n'.join(queries)}
             }}
-        """)
+        """
+
+    def _parse_service_metrics(self, result: dict) -> Dict[str, Dict[str, List[ServiceMetric]]]:
         ret = {}
-        for metric_name, metric_val in result.items():
-            if metric_val['error']:
-                self._logger.error(f"Error retrieving {metric_name}: {metric_val['error']}")
+        for expression_name, expression_result in result.items():
+            error = expression_result['error']
+            if error:
+                self._logger.error(f"Error retrieving {expression_name}: {error}")
                 continue
-            value = metric_val['results'][0]['values'][0]['value']
-            name_parts = metric_name.split('_', 1)
-            service_metrics = ret.get(name_parts[0], ServiceSummaryMetrics())
-            service_metrics[name_parts[1]] = value
-            ret[name_parts[0]] = service_metrics
+            name_parts = expression_name.split('_', 1)
+            service_metrics = ret.setdefault(name_parts[0], {})
+            metric_results = service_metrics.setdefault(name_parts[1], [])
+            for metric_result in expression_result['results']:
+                metric_results.append(ServiceMetric.from_gql(metric_result))
         return ret
 
     async def find_services_topology(self, services: List[Service], time_range: TimeRange) -> Topology:
-        duration = time_range.to_gql()
         service_ids = _val_to_gql([service.id for service in services])
-        result = await self._query(f"""
-            query queryTopology {{
-              topology: getServicesTopology(duration: {duration}, serviceIds: {service_ids}) {{
-                nodes {{
-                  id
-                  name
-                  type
-                }}
-                calls {{
-                  source
-                  target
-                }}
-              }}
-            }}""")
+        result = await self._query(
+            solve_template("services-topology-query-template.gql",
+                           {"duration": time_range, "service_ids": service_ids}))
         return Topology.from_graphql(result['topology'])

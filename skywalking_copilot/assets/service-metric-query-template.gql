@@ -1,0 +1,15 @@
+{{ service.shortName }}_{{ metric_name }}: execExpression(expression: "{{ expression }}", entity: {{ service.to_gql() }}, duration: {{ duration.to_gql() }}) {
+    results {
+        metric {
+            labels {
+                key
+                value
+            }
+        }
+        values {
+            id
+            value
+        }
+    }
+    error
+}
