@@ -4,5 +4,6 @@ query listServices {
         name
         normal
         shortName
+        layers
     }
 }

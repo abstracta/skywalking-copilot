@@ -5,7 +5,7 @@ from typing import Optional, List, Type
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from skywalking_copilot.skywalking import SkywalkingApi, TimeRange, Topology, ServiceMetric
+from skywalking_copilot.skywalking import SkywalkingApi, TimeRange, Topology, ServiceMetric, Service
 from skywalking_copilot.templates import solve_template
 
 
@@ -24,7 +24,8 @@ class ServicesMetricsTool(AgentTool):
     async def _arun(self) -> str:
         services = await self.sw_api.find_services()
         service_metrics = await self.sw_api.find_services_summary_metrics(services, TimeRange.from_last_minutes(10))
-        return solve_template("services-metrics-template.md", {"service_metrics": service_metrics})
+        return solve_template("services-metrics-template.md",
+                              {"service_metrics": service_metrics, "sw_url": self.sw_api.services_url})
 
 
 class ServicesTopologyTool(AgentTool):
@@ -37,8 +38,7 @@ class ServicesTopologyTool(AgentTool):
         topology = await self.sw_api.find_services_topology(services, TimeRange.from_last_minutes(10))
         return self._topology_to_markdown(topology)
 
-    @staticmethod
-    def _topology_to_markdown(topology: Topology) -> str:
+    def _topology_to_markdown(self, topology: Topology) -> str:
         node_ids = {}
         nodes = {}
         edges = []
@@ -53,7 +53,7 @@ class ServicesTopologyTool(AgentTool):
         for edge in topology.edges:
             if node_ids.get(edge.source):
                 edges.append((node_ids[edge.source], node_ids[edge.target]))
-        return solve_template("topology-diagram-template.puml", {"nodes": nodes, "edges": edges})
+        return solve_template("services-topology-template.md", {"nodes": nodes, "edges": edges, "sw_url": self.sw_api.services_url})
 
 
 class ServiceMetricId(Enum):
@@ -78,7 +78,7 @@ class MetricChart:
         self.unit = unit
         self.expression = expression
 
-    def to_markdown(self, data: List[ServiceMetric]) -> str:
+    def to_markdown(self, data: List[ServiceMetric], service_url: str) -> str:
         x_vals = sorted(set([int(value.id) for metric in data for value in metric.values]))
         series = []
         legends = []
@@ -99,7 +99,7 @@ class MetricChart:
             series.append(serie)
         return solve_template("service-metric-chart-template.md",
                               {"title": self.title + (f" ({self.unit})" if self.unit else ""), "unit": self.unit,
-                               "x_vals": x_vals, "legends": legends, "series": series})
+                               "x_vals": x_vals, "legends": legends, "series": series, "sw_url": service_url})
 
 
 metrics_charts = {
@@ -138,4 +138,4 @@ class ServiceMetricChartTool(AgentTool):
                                                          TimeRange.from_last_minutes(10))
         service_metrics = next(iter(result.values()))
         data = next(iter(service_metrics.values()))
-        return metric_chart.to_markdown(data)
+        return metric_chart.to_markdown(data, self.sw_api.get_service_url(services[0]))

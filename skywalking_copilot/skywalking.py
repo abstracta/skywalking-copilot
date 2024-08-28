@@ -15,6 +15,7 @@ class Service(BaseModel):
     name: str
     normal: bool
     shortName: str
+    layers: List[str]
 
     def to_gql(self) -> str:
         return _val_to_gql({"serviceName": self.name, "normal": self.normal})
@@ -98,7 +99,7 @@ class Topology(BaseModel):
 
 
 class ServiceMetricValue(BaseModel):
-    id: str
+    id: Optional[str]
     value: Optional[str]
 
 
@@ -116,6 +117,8 @@ class ServiceMetric(BaseModel):
 class SkywalkingApi:
 
     def __init__(self, url: str):
+        self._base_url = url
+        self.services_url = f"{url}/General-Service/Services"
         transport = AIOHTTPTransport(url=url + "/graphql")
         self._client = Client(transport=transport, fetch_schema_from_transport=True)
         self._logger = logging.getLogger("skywalking_api")
@@ -146,7 +149,7 @@ class SkywalkingApi:
         for service_name, service_metrics in result.items():
             for metric_name, metric_value in service_metrics.items():
                 service_metrics = ret.get(service_name, ServiceSummaryMetrics())
-                service_metrics[metric_name] = metric_value[0].value
+                service_metrics[metric_name] = metric_value[0].values[0].value
                 ret[service_name] = service_metrics
         return ret
 
@@ -191,3 +194,6 @@ class SkywalkingApi:
             solve_template("services-topology-query-template.gql",
                            {"duration": time_range, "service_ids": service_ids}))
         return Topology.from_graphql(result['topology'])
+
+    def get_service_url(self, service: Service) -> str:
+        return f"{self._base_url}/dashboard/{service.layers[0]}/Service/{service.id}/General-Service"
