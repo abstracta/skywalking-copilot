@@ -20,11 +20,17 @@
   "xAxis": {
     "data": {{ x_vals|json }},
     "axisLabel": {
-      "formatter": "formatTime"
+      "formatter": {
+        "name": "formatEpoch",
+        "format": "HH:mm"
+      }
     },
     "axisPointer": {
       "label": {
-        "formatter": "formatTime"
+        "formatter": {
+          "name": "formatEpoch",
+          "format": "HH:mm"
+        }
       }
     }
   },
