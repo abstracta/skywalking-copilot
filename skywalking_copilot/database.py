@@ -1,7 +1,10 @@
 import os
+import datetime
+import uuid
+from typing import List
 
 from psycopg import AsyncConnection
-from sqlalchemy import select, ForeignKey
+from sqlalchemy import select, ForeignKey, PrimaryKeyConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column
@@ -39,6 +42,22 @@ class Session(Base):
         return domain.Session(id=self.id, locales=self.locales.split(','))
 
 
+class SessionsRepository:
+
+    def __init__(self, db: AsyncSession):
+        self._db = db
+
+    async def save(self, session: domain.Session) -> None:
+        self._db.add(Session.from_domain(session))
+        await self._db.commit()
+
+    async def find_by_id(self, session_id: str) -> domain.Session:
+        stmt = select(Session).filter(Session.id == session_id)
+        result = await self._db.execute(stmt)
+        ret = result.scalar()
+        return ret.to_domain() if ret else None
+
+
 class Question(Base):
     __tablename__ = "questions"
     id: Mapped[str] = mapped_column(primary_key=True)
@@ -52,27 +71,45 @@ class Question(Base):
                         answer=question.answer)
 
 
-class SessionsRepository:
-
-    def __init__(self, db: AsyncSession):
-        self._db = db
-
-    async def save(self, session: domain.Session) -> None:
-        self._db.add(Session.from_domain(session))
-        await self._db.commit()
-
-    async def find_session(self, session_id: str) -> domain.Session:
-        stmt = select(Session).filter(Session.id == session_id)
-        result = await self._db.execute(stmt)
-        ret = result.scalar()
-        return ret.to_domain() if ret else None
-
-
 class QuestionsRepository:
 
     def __init__(self, db: AsyncSession):
         self._db = db
 
-    async def save_question(self, question: domain.Question):
+    async def save(self, question: domain.Question):
         self._db.add(Question.from_domain(question))
+        await self._db.commit()
+
+
+class AlarmEvent(Base):
+    __tablename__ = "alarm_events"
+    session_id: Mapped[str] = mapped_column(ForeignKey(Session.id))
+    alarm_id: Mapped[str] = mapped_column()
+    id: Mapped[uuid.UUID] = mapped_column()
+    event_type: Mapped[str] = mapped_column()
+    start_time: Mapped[datetime.datetime] = mapped_column()
+    end_time: Mapped[datetime.datetime] = mapped_column()
+    service: Mapped[str] = mapped_column()
+    message: Mapped[str] = mapped_column()
+    __table_args__ = (
+        PrimaryKeyConstraint('session_id', 'alarm_id', 'service'),
+    )
+
+
+class AlarmEventsRepository:
+
+    def __init__(self, db: AsyncSession):
+        self._db = db
+
+    async def save(self, alarm_event: AlarmEvent):
+        self._db.add(alarm_event)
+        await self._db.commit()
+
+    async def find_by_session_id(self, session_id: str) -> List[AlarmEvent]:
+        stmt = select(AlarmEvent).filter(AlarmEvent.session_id == session_id)
+        result = await self._db.execute(stmt)
+        return [a for a in result.scalars().all()]
+
+    async def delete(self, known_event: AlarmEvent):
+        await self._db.delete(known_event)
         await self._db.commit()

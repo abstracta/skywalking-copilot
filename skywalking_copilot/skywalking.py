@@ -1,5 +1,6 @@
 import logging
 import datetime
+import uuid
 from enum import Enum
 from typing import List, Optional, Dict
 
@@ -114,6 +115,42 @@ class ServiceMetric(BaseModel):
             values=[ServiceMetricValue(**val) for val in data['values']])
 
 
+def _parse_epoch(epoch: int) -> datetime.datetime:
+    return datetime.datetime.fromtimestamp(epoch / 1000)
+
+
+class AlarmType(Enum):
+    ERROR = "Error"
+
+
+class AlarmSource(BaseModel):
+    service: str
+
+
+class AlarmEvent(BaseModel):
+    uuid: uuid.UUID
+    startTime: datetime.datetime
+    endTime: datetime.datetime
+    type: AlarmType
+    source: AlarmSource
+    message: str
+
+    @staticmethod
+    def from_gql(data: dict) -> 'AlarmEvent':
+        return AlarmEvent(uuid=uuid.UUID(data['uuid']), startTime=_parse_epoch(data['startTime']),
+                          endTime=_parse_epoch(data['endTime']), type=AlarmType(data['type']),
+                          source=AlarmSource(**data['source']), message=data['message'])
+
+
+class Alarm(BaseModel):
+    id: str
+    events: List[AlarmEvent]
+
+    @staticmethod
+    def from_gql(data: dict) -> 'Alarm':
+        return Alarm(id=data['id'], events=[AlarmEvent.from_gql(event) for event in data['events']])
+
+
 class SkywalkingApi:
 
     def __init__(self, url: str):
@@ -197,3 +234,8 @@ class SkywalkingApi:
 
     def get_service_url(self, service: Service) -> str:
         return f"{self._base_url}/dashboard/{service.layers[0]}/Service/{service.id}/General-Service"
+
+    async def find_alarms(self, time_range: TimeRange, limit: int) -> List[Alarm]:
+        result = await self._query(
+            solve_template("alarms-query-template.gql", {"duration": time_range, "limit": limit}))
+        return [Alarm.from_gql(alarm) for alarm in result['getAlarm']['msgs']]

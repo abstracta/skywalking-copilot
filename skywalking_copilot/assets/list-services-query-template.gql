@@ -1,9 +1,5 @@
 query listServices {
     services: listServices(layer: "GENERAL") {
-        id
-        name
-        normal
-        shortName
-        layers
+        id name normal shortName layers
     }
 }

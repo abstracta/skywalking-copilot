@@ -2,13 +2,11 @@
     results {
         metric {
             labels {
-                key
-                value
+                key value
             }
         }
         values {
-            id
-            value
+            id value
         }
     }
     error

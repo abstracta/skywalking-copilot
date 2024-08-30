@@ -1,13 +1,10 @@
 query queryTopology {
     topology: getServicesTopology(duration: {{ duration.to_gql() }}, serviceIds: {{ service_ids }}) {
         nodes {
-            id
-            name
-            type
+            id name type
         }
         calls {
-            source
-            target
+            source target
         }
     }
 }

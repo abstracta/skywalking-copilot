@@ -20,5 +20,6 @@
         }
       ]
     }
-  ]
+  ],
+  "pollInteractionPeriodSeconds": 5
 }

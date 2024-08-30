@@ -1,0 +1,13 @@
+query queryAlarms {
+    getAlarm(duration: {{ duration.to_gql() }}, paging: { pageNum: 1, pageSize: {{ limit }} }) {
+        msgs {
+            id
+            events {
+                uuid startTime endTime type message
+                source {
+                    service
+                }
+            }
+        }
+    }
+}
