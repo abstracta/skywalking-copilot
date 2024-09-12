@@ -9,5 +9,9 @@ templates_repo = Environment(loader=FileSystemLoader(assets_path))
 templates_repo.filters['json'] = json.dumps
 
 
+def solve_response(name: str, ctx: Dict[str, Any]) -> str:
+    return solve_template(f"responses/{name}.md", ctx)
+
+
 def solve_template(file_name: str, context: Dict[str, Any]) -> str:
     return templates_repo.get_template(file_name).render(**context)

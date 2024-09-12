@@ -1,8 +1,8 @@
 import logging
 import os
-from typing import Annotated, AsyncIterator, Dict, List
+from typing import Annotated, AsyncIterator, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, status, Depends, Request
+from fastapi import FastAPI, HTTPException, status, Depends, Request, Body
 from fastapi.responses import FileResponse, StreamingResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ from skywalking_copilot.alarms import find_new_alarms
 from skywalking_copilot.database import get_db, SessionsRepository, QuestionsRepository, get_raw_connection
 from skywalking_copilot.domain import SessionBase, Session, Question
 from skywalking_copilot.skywalking import SkywalkingApi, TimeRange, AlarmEvent
-from skywalking_copilot.templates import solve_template
+from skywalking_copilot.templates import solve_response
 
 logging.basicConfig()
 app = FastAPI()
@@ -98,20 +98,21 @@ class InteractionResponse(BaseModel):
 
 
 @app.post('/sessions/{session_id}/interactions')
-async def record_interaction(session_id: str, _: Dict, db: Annotated[AsyncSession, Depends(get_db)]) \
+async def record_interaction(
+        session_id: str, db: Annotated[AsyncSession, Depends(get_db)], _: Optional[Dict] = Body(None)) \
         -> InteractionResponse:
     await _find_session(session_id, db)
     alarms = await find_new_alarms(TimeRange.from_last_minutes(30), 10, sw_api, session_id, db)
     return InteractionResponse(
-        summary=solve_template("report-alarms.md", {"alarms": await _build_alarms_context(alarms)}) if alarms else "")
+        summary=solve_response("alarms", {"alarms": await _build_alarms_context(alarms)}) if alarms else "")
 
 
 async def _build_alarms_context(alarms: List[AlarmEvent]) -> List[Dict]:
     services = await sw_api.find_services()
     services_map = {service.name: service for service in services}
     return [{
-        'start': alarm.startTime.strftime('%H:%M'),
-        'end': alarm.endTime.strftime('%H:%M'),
+        'start': alarm.start_time.strftime('%H:%M'),
+        'end': alarm.end_time.strftime('%H:%M'),
         'type': alarm.type.value,
         'service_name': alarm.source.service,
         'service_url': sw_api.get_service_url(services_map[alarm.source.service]),

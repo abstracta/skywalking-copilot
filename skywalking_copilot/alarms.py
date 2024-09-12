@@ -26,7 +26,7 @@ def _group_events_by_alarm_id_and_service(alarms: List[skywalking.Alarm]) \
         last_source_event = {}
         for event in alarm.events:
             service = event.source.service
-            if service not in last_source_event or last_source_event[service].startTime < event.startTime:
+            if service not in last_source_event or last_source_event[service].start_time < event.start_time:
                 last_source_event[service] = event
         ret[alarm_id] = last_source_event
     return ret
@@ -62,5 +62,5 @@ async def _find_new_events(
 
 def _build_database_event(session_id: str, alarm_id: str, event: skywalking.AlarmEvent) -> database.AlarmEvent:
     return database.AlarmEvent(
-        session_id=session_id, alarm_id=alarm_id, id=event.uuid, event_type=event.type, start_time=event.startTime,
-        end_time=event.endTime, service=event.source.service, message=event.message)
+        session_id=session_id, alarm_id=alarm_id, id=event.uuid, event_type=event.type, start_time=event.start_time,
+        end_time=event.end_time, service=event.source.service, message=event.message)

@@ -5,8 +5,8 @@ from typing import Optional, List, Type
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from skywalking_copilot.skywalking import SkywalkingApi, TimeRange, Topology, ServiceMetric, Service
-from skywalking_copilot.templates import solve_template
+from skywalking_copilot.skywalking import SkywalkingApi, TimeRange, Topology, ServiceMetric
+from skywalking_copilot.templates import solve_response
 
 
 class AgentTool(BaseTool):
@@ -24,7 +24,7 @@ class ServicesMetricsTool(AgentTool):
     async def _arun(self) -> str:
         services = await self.sw_api.find_services()
         service_metrics = await self.sw_api.find_services_summary_metrics(services, TimeRange.from_last_minutes(10))
-        return solve_template("services-metrics-template.md",
+        return solve_response("services-metrics",
                               {"service_metrics": service_metrics, "sw_url": self.sw_api.services_url})
 
 
@@ -53,7 +53,7 @@ class ServicesTopologyTool(AgentTool):
         for edge in topology.edges:
             if node_ids.get(edge.source):
                 edges.append((node_ids[edge.source], node_ids[edge.target]))
-        return solve_template("services-topology-template.md", {"nodes": nodes, "edges": edges, "sw_url": self.sw_api.services_url})
+        return solve_response("services-topology", {"nodes": nodes, "edges": edges, "sw_url": self.sw_api.services_url})
 
 
 class ServiceMetricId(Enum):
@@ -97,9 +97,9 @@ class MetricChart:
                 serie["name"] = metric.labels[0]
                 legends.append(metric.labels[0])
             series.append(serie)
-        return solve_template("service-metric-chart-template.md",
-                              {"title": self.title + (f" ({self.unit})" if self.unit else ""), "unit": self.unit,
-                               "x_vals": x_vals, "legends": legends, "series": series, "sw_url": service_url})
+            return solve_response("service-metric-chart",
+                                  {"title": self.title + (f" ({self.unit})" if self.unit else ""), "unit": self.unit,
+                                   "x_vals": x_vals, "legends": legends, "series": series, "sw_url": service_url})
 
 
 metrics_charts = {

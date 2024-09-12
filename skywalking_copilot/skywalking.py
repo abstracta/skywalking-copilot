@@ -1,8 +1,8 @@
-import logging
 import datetime
+import logging
 import uuid
 from enum import Enum
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
@@ -15,6 +15,7 @@ class Service(BaseModel):
     id: str
     name: str
     normal: bool
+    # This field does not follow python naming convention to simplify object creation from graphql response
     shortName: str
     layers: List[str]
 
@@ -129,16 +130,16 @@ class AlarmSource(BaseModel):
 
 class AlarmEvent(BaseModel):
     uuid: uuid.UUID
-    startTime: datetime.datetime
-    endTime: datetime.datetime
+    start_time: datetime.datetime
+    end_time: datetime.datetime
     type: AlarmType
     source: AlarmSource
     message: str
 
     @staticmethod
     def from_gql(data: dict) -> 'AlarmEvent':
-        return AlarmEvent(uuid=uuid.UUID(data['uuid']), startTime=_parse_epoch(data['startTime']),
-                          endTime=_parse_epoch(data['endTime']), type=AlarmType(data['type']),
+        return AlarmEvent(uuid=uuid.UUID(data['uuid']), start_time=_parse_epoch(data['startTime']),
+                          end_time=_parse_epoch(data['endTime']), type=AlarmType(data['type']),
                           source=AlarmSource(**data['source']), message=data['message'])
 
 
@@ -167,8 +168,15 @@ class SkywalkingApi:
         await self._client.close_async()
 
     async def find_services(self) -> List[Service]:
-        result = await self._query(solve_template("list-services-query-template.gql", {}))
+        result = await self._query_by_name("list-services", {})
         return [Service(**service) for service in result['services']]
+
+    async def _query_by_name(self, query_name: str, context: Dict[str, Any]) -> dict:
+        return await self._query(self._solve_query(query_name, context))
+
+    @staticmethod
+    def _solve_query(query_name: str, context: Dict[str, Any]) -> str:
+        return solve_template(f"graphql/{query_name}.gql", context)
 
     async def _query(self, query: str) -> dict:
         return await self._client.session.execute(gql(query))
@@ -196,14 +204,14 @@ class SkywalkingApi:
         result = await self._query(query)
         return self._parse_service_metrics(result)
 
-    @staticmethod
-    def _build_services_metrics_query(services: List[Service], metrics: Dict[str, str], time_range: TimeRange) -> str:
+    def _build_services_metrics_query(
+            self, services: List[Service], metrics: Dict[str, str], time_range: TimeRange) -> str:
         queries = []
         for service in services:
             for metric_name, expression in metrics.items():
-                query = solve_template("service-metric-query-template.gql",
-                                       {"service": service, "metric_name": metric_name, "expression": expression,
-                                        "duration": time_range})
+                query = self._solve_query("service-metric",
+                                          {"service": service, "metric_name": metric_name, "expression": expression,
+                                           "duration": time_range})
                 queries.append(query)
         return f"""
             query queryMetrics {{
@@ -227,15 +235,12 @@ class SkywalkingApi:
 
     async def find_services_topology(self, services: List[Service], time_range: TimeRange) -> Topology:
         service_ids = _val_to_gql([service.id for service in services])
-        result = await self._query(
-            solve_template("services-topology-query-template.gql",
-                           {"duration": time_range, "service_ids": service_ids}))
+        result = await self._query_by_name("services-topology", {"duration": time_range, "service_ids": service_ids})
         return Topology.from_graphql(result['topology'])
 
     def get_service_url(self, service: Service) -> str:
         return f"{self._base_url}/dashboard/{service.layers[0]}/Service/{service.id}/General-Service"
 
     async def find_alarms(self, time_range: TimeRange, limit: int) -> List[Alarm]:
-        result = await self._query(
-            solve_template("alarms-query-template.gql", {"duration": time_range, "limit": limit}))
+        result = await self._query_by_name("alarms", {"duration": time_range, "limit": limit})
         return [Alarm.from_gql(alarm) for alarm in result['getAlarm']['msgs']]
