@@ -22,8 +22,6 @@ from skywalking_copilot.database import CHAT_HISTORY_TABLE
 from skywalking_copilot.domain import Session
 from skywalking_copilot.skywalking import SkywalkingApi
 
-logging.getLogger("openai").level = logging.DEBUG
-
 
 class Agent:
 

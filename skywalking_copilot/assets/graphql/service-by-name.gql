@@ -1,0 +1,5 @@
+query listServices {
+    service: findService(serviceName: "{{service_name}}") {
+        id name normal shortName layers
+    }
+}

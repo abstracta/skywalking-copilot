@@ -19,6 +19,18 @@
           }
         }
       ]
+    },
+    {
+      "condition": {
+        "urlRegex": "{{ app_url }}/v3/segments",
+        "event": "onBeforeRequest"
+      },
+      "actions": [
+        {
+          "recordInteraction": {
+          }
+        }
+      ]
     }
   ],
   "pollInteractionPeriodSeconds": 5

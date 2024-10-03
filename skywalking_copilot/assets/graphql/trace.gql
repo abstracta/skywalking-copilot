@@ -1,0 +1,27 @@
+query queryTrace {
+  trace: queryTrace(traceId: {{ trace_id }}) {
+    spans {
+      traceId
+      segmentId
+      spanId
+      refs {
+        parentSegmentId
+        parentSpanId
+        traceId
+      }
+      serviceCode
+      startTime
+      endTime
+      endpointName
+      type
+      peer
+      component
+      isError
+      layer
+      tags {
+        key
+        value
+      }
+    }
+  }
+}

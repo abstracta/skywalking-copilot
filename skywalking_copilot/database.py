@@ -13,7 +13,7 @@ from skywalking_copilot import domain
 
 db_url = os.getenv("DB_URL")
 engine = create_async_engine(db_url)
-async_session = async_sessionmaker(engine, autoflush=True, autocommit=False)
+async_session = async_sessionmaker(engine, autoflush=True, autocommit=False, expire_on_commit=False)
 Base = declarative_base()
 CHAT_HISTORY_TABLE = 'chat_history'
 
