@@ -85,53 +85,7 @@ This will spin up the Skywalking showcase locally with minimum services and memo
 
 Here is a diagram of the deployed infrastructure:
 
-```plantuml
-@startuml
-!define LOGOS https://raw.githubusercontent.com/plantuml-stdlib/gilbarbara-plantuml-sprites/master/pngs
-!define CICON https://raw.githubusercontent.com/plantuml-stdlib/cicon-plantuml-sprites/master/pngs
-!define SPRING_LOGO <img:LOGOS/spring-icon.png{scale=0.7}>
-!define SKW_LOGO <img:https://skywalking.apache.org/favicons/android-chrome-192x192.png{scale=0.2}>
-
-skinparam DefaultTextAlignment center;
-
-rectangle "Skywalking" {
-  agent ui as "UI\nSKW_LOGO"
-  agent oap as "OAP\nSKW_LOGO"
-  database banyandb
-  ui --> oap
-  oap --> banyandb
-}
-
-rectangle "Sample" {
-  agent gateway as "Gateway\nSPRING_LOGO"
-  agent songs as "Songs\nSPRING_LOGO"
-  database songsdb as "SongsDB"
-  agent rcmd as "Recomendations\n<img:LOGOS/flask.png{scale=0.7}>"
-  agent app as "App\n<img:LOGOS/nodejs.png{scale=0.7}>"
-  agent loadgen as "Loadgen\n<img:LOGOS/selenium.png{scale=0.7}>"
-  agent frontend as "Frontend\n<img:LOGOS/react.png{scale=0.7}>"
-  queue activemq as "ActiveMQ\n<img:CICON/activemq.png{scale=0.7}>"
-  agent rating as "Rating\n<img:LOGOS/go.png{scale=0.7}>"
-  
-  gateway .> oap
-  gateway --> songs
-  gateway --> rcmd
-  songs .> oap
-  songs --> songsdb
-  songs --> activemq
-  rcmd .> oap
-  rcmd --> songs
-  rcmd --> rating
-  app .> oap
-  app --> gateway
-  loadgen -> frontend
-  frontend .> oap
-  frontend --> app
-  rating .> oap
-  
-}
-@enduml
-```
+![diagram](https://www.plantuml.com/plantuml/png/dLFVRzCm47xlNs7wdWJsWXWmRMnYcXZhM46y8A5BSdLD_SEpdNNLjF-TixFKpRHA22cjxhwxxxlFEUVO1t2XKtBogiM5qCWkP-UpELk6OFrXLJbObro4PLTt7brZT40ToiQeoahGaLZuq4fHLrp86XmzKEIITIAWhnJuWAwoclljdDEBqzdLVynf15N_RSJy-kRYwlntF17x81G_J6Uh8aNp8kgKrF_W6v3uyNNvzl4eKx_ytE4DBlrgimQv8dO95febbiRnQW5tKSjNe5jdH5iqIsSK5c_U7TpJRpJZW6PCF2bOSA3O6IwWa-4xteSJARXMT6hMq1-wzvE9moQ0vXBPTBwTF6KF4yQ0nyvECF1i-kFYbnuCJxT50pPLPoVNut8B0Mhmo6hG6_9S4qPAHN4KEPH49cMv_ZZs0ifAtFN18U0QDcdSUH_JoFpsioblQ46fRnwZtFNSMsfiwznwzYchk4QrgNA3ZL6eYIMC9hMTBIya-DNp_MO9iFtRER5sHDEcnJz-FqyQQ2b8tCi-7l4zIjIYK_iL5YxTxlu0dv-IaOP3QC9B0hSTTiYeAEvGtVR-K_BrsvD0-gggeME_2GT1QDw_mnIE373p4fEUOT5bkYePIDSbhMoCfKqHb4gPbTBCQUiHDhWdCD8pBMQPjGlqno44hCtzbCJgO8YGONi43ciWT0WpSuiaFpP2_OZSGX_5CNLqIlu5)
 
 * To access Skywalking frontend go to `http://localhost:9999`. You can now explore information collected by Skywalking on the showcase sample services.
 
