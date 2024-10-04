@@ -21,17 +21,32 @@
       "migrations": [
         "poetry run alembic upgrade head"
       ],
+      "showcase": [
+        "cd skywalking-showcase",
+        "make deploy.docker FEATURE_FLAGS=single-node,agent"
+      ],
       "agent": [
         "poetry run python -m skywalking_copilot 0"
       ],
       "browser": [
         "pnpm --dir browser-copilot/browser-extension dev"
       ],
+      "stop-showcase": [
+        "cd skywalking-showcase",
+        "make undeploy.docker"
+      ],
       "update-git": [
         "git submodule update --recursive --remote"
       ],
       "update-deps": [
         "poetry update"
+      ],
+      "update-showcase": [
+        "cd skywalking-showcase",
+        "git reset --hard",
+        "git pull origin main",
+        "git apply ../showcase.patch",
+        "make docker"
       ],
       "install": [
         "pnpm --dir browser-copilot/browser-extension install",

@@ -1,3 +1,6 @@
 [submodule "browser-copilot"]
 	path = browser-copilot
 	url = https://github.com/abstracta/browser-copilot
+[submodule "skywalking-showcase"]
+	path = skywalking-showcase
+	url = https://github.com/apache/skywalking-showcase.git

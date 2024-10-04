@@ -1,0 +1,96 @@
+From f4678c0139acdefeb0441374713d5d37fdfb1b50 Mon Sep 17 00:00:00 2001
+From: rabelenda <rabelenda@gmail.com>
+Date: Thu, 3 Oct 2024 19:26:01 -0300
+Subject: [PATCH] Tune memory consumption and put english names on songs
+
+Additionally, delete volumes when doing undeploy of docker
+---
+ deploy/platform/docker/Makefile                        |  2 +-
+ deploy/platform/docker/docker-compose.agent.yaml       | 10 ++++++++++
+ deploy/platform/docker/docker-compose.single-node.yaml |  6 +++++-
+ services/songs-service/src/main/resources/data.sql     |  8 ++++----
+ 4 files changed, 20 insertions(+), 6 deletions(-)
+
+diff --git a/deploy/platform/docker/Makefile b/deploy/platform/docker/Makefile
+index c253b0b..6224bc2 100644
+--- a/deploy/platform/docker/Makefile
++++ b/deploy/platform/docker/Makefile
+@@ -37,4 +37,4 @@ endif
+ 
+ .PHONY: undeploy
+ undeploy:
+-	docker compose $(features) down
++	docker compose $(features) down --volumes
+diff --git a/deploy/platform/docker/docker-compose.agent.yaml b/deploy/platform/docker/docker-compose.agent.yaml
+index ff8b500..163bd07 100644
+--- a/deploy/platform/docker/docker-compose.agent.yaml
++++ b/deploy/platform/docker/docker-compose.agent.yaml
+@@ -25,6 +25,10 @@ services:
+     environment:
+       SW_AGENT_NAME: gateway
+       SW_AGENT_COLLECTOR_BACKEND_SERVICES: ${BACKEND_SERVICE}:11800
++    deploy:
++      resources:
++        limits:
++          memory: 512M
+     healthcheck:
+       test: [ "CMD-SHELL", "curl http://localhost/actuator/health" ]
+       interval: 30s
+@@ -45,6 +49,10 @@ services:
+       SW_AGENT_COLLECTOR_BACKEND_SERVICES: ${BACKEND_SERVICE}:11800
+       ACTIVE_MQ_URL: tcp://activemq:61616
+       ACTIVE_MQ_QUEUE: queue-songs-ping      
++    deploy:
++      resources:
++        limits:
++          memory: 512M
+     healthcheck:
+       test: [ "CMD-SHELL", "curl http://localhost/actuator/health" ]
+       interval: 30s
+@@ -103,6 +111,8 @@ services:
+     environment:
+       SW_AGENT_COLLECTOR_BACKEND_SERVICES: ${BACKEND_SERVICE}:11800
+     networks: [ sw ]
++    ports:
++      - "9091:80"
+     volumes:
+       - ./config/apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml
+       - ./config/apisix/config.yaml:/usr/local/apisix/conf/config.yaml
+diff --git a/deploy/platform/docker/docker-compose.single-node.yaml b/deploy/platform/docker/docker-compose.single-node.yaml
+index 64f5bc9..469fdca 100644
+--- a/deploy/platform/docker/docker-compose.single-node.yaml
++++ b/deploy/platform/docker/docker-compose.single-node.yaml
+@@ -41,8 +41,12 @@ services:
+       SW_STORAGE_BANYANDB_TARGETS: banyandb:17912
+       SW_TELEMETRY: prometheus # @feature: so11y; expose the metrics of self o11y through prometheus
+       SW_PROMETHEUS_FETCHER: default # @feature: so11y; fetch the metrics of self o11y through prometheus
+-      JAVA_OPTS: "-Xms2048m -Xmx2048m"
++      JAVA_OPTS: "-Xms1024m -Xmx1024m"
+       SW_METER_ANALYZER_ACTIVE_FILES: datasource,threadpool,satellite,spring-sleuth,go-runtime,java-agent
++    deploy:
++      resources:
++        limits:
++          memory: 2G
+     healthcheck:
+       test: ["CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/11800"]
+       interval: 30s
+diff --git a/services/songs-service/src/main/resources/data.sql b/services/songs-service/src/main/resources/data.sql
+index 2942750..ad02aee 100644
+--- a/services/songs-service/src/main/resources/data.sql
++++ b/services/songs-service/src/main/resources/data.sql
+@@ -28,8 +28,8 @@
+ 
+ insert into song
+     (id, name, artist, genre, liked)
+-values (1, '倩女幽魂', '张国荣', 'HK-POP', 999),
+-       (2, '沉默是金', '张国荣', 'HK-POP', 1000),
+-       (3, '风继续吹', '张国荣', 'HK-POP', 1002),
+-       (4, '灰色轨迹', 'Beyond', 'HK-POP', 9000)
++values (1, 'Jedi Rocks', 'Jerry Hey', 'Jazz', 999),
++       (2, 'Star Wars Theme', 'John Williams', 'Film Score', 1000),
++       (3, 'Across the Stars', 'John Williams', 'Film Score', 1002),
++       (4, 'The Imperial March', 'John Williams', 'Film Score', 9000)
+ ;
+-- 
+2.45.2
+

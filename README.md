@@ -1,8 +1,21 @@
 # Skywalking Copilot
 
-A [Browser Copilot](https://github.com/abstracta/browser-copilot) that empowers the usage of applications that use [Apache Skywalking](https://skywalking.apache.org/) as observability platform.
+A [Browser Copilot](https://github.com/abstracta/browser-copilot) that empowers the usage of applications that use [Apache Skywalking](https://skywalking.apache.org/) as an observability platform.
 
-Currently, this project only covers some basic scenarios. If you are interested in helping to evolve it we are open to contributions. 
+![screenshot](screenshot.png)
+
+Currently, this project only covers some basic scenarios. If you are interested in helping to evolve it, we are open to contributions. 
+
+## Features
+
+* 🤖 Automatic activation of the agent when the configured application is accessed in a browser.
+* 🚨 Proactive notifications of live alerts.
+* 🕵️‍♂️ Proactive report of traces generated from the application in the active browser tab.
+* 🗺️ Provide services topology diagram.
+* 🧾 Provide a table of the services and their associated metrics.
+* 📉 Generate charts of metrics like response time, error rate, load, Apdex, and message queuing metrics.
+* 🤔 Ask any question about displayed information.
+* ➕ More to come!
 
 ## Requirements
 
@@ -16,7 +29,7 @@ devbox install && devbox run install
 
 Set `OPENAI_API_KEY` with proper value in [.env](./.env)
 
-Start postgres:
+Start Postgres:
 
 ```bash
 devbox run postgres
@@ -24,25 +37,25 @@ devbox run postgres
 
 ## Development
 
-To update to latest version of browser-copilot submodule you can use
+To update to the latest version of the browser-copilot submodule, you can use
 
 ```bash
 devbox run update-git
 ```
 
-To update to latest dependencies of python:
+To update to the latest dependencies of the Python project:
 
 ```bash
 devbox run update-python
 ```
 
-To add new dependencies to python:
+To add new dependencies to the Python project:
 
 ```bash
 poetry add X
 ```
 
-To generate new DB migrations due to changes in database.py module:
+To generate new DB migrations due to changes in the `database.py` module:
 
 ```bash
 devbox run new-migration "description"
@@ -54,25 +67,23 @@ To run DB migrations against the local database:
 devbox run migrations
 ```
 
-> the app automatically updates database with migrations when postgres service is started with devbox
+> The app automatically updates the database with migrations when the Postgres service is started with devbox
 
+To update the Skywalking showcase run:
+
+```bash
+devbox run update-showcase
+```
 
 ## Skywalking Showcase
 
-To try the copilot locally you can try running [Skywalking showcase](https://skywalking.apache.org/docs/skywalking-showcase/next/readme/#quick-start) locally.
+To try the copilot locally, try [Skywalking showcase](https://skywalking.apache.org/docs/skywalking-showcase/next/readme/#quick-start). 
 
-The steps to run Skywalking showcase locally:
-* clone the repository `https://github.com/apache/skywalking-showcase.git`
-* modify `deploy/platform/docker/scripts/docker-compose.agent.yaml` by adding port mapping `9091:80` to frontend service. This allows to access the frontend later on and try the copilot with it.
-* if you want to tune showcase memory consumption you can modify `deploy/platform/docker/scripts/docker-compose.agent.yaml` adding following section to both `songs` and `gateway` services:  
-  ```yaml
-  deploy:
-    resources:
-      limits:
-        memory: 512M
-  ```
-  Additionally, you can add the same section but configured with `2G` to `oap` service in `deploy/platform/docker/scripts/docker-compose.single-node.yaml`.
-* Run on `make deploy.docker FEATURE_FLAGS=single-node,agent`. This wills spin up showcase sample services and skwyalking server, frontend and database. Here is a diagram of deployed infrastrcuture:
+This project already includes a tuned version of the showcase. You can build it with `devbox run update-showcase` and run it with `devbox run showcase`.
+
+This will spin up the Skywalking showcase locally with minimum services and memory required, as well as showcase app frontend access from host and English song names.
+
+Here is a diagram of the deployed infrastructure:
 
 ```plantuml
 @startuml
@@ -122,7 +133,9 @@ rectangle "Sample" {
 @enduml
 ```
 
-* Check docker-compose containers status and access `http://localhost:9999` to access the Skywalking frontend. You can now explore information collected by Skywalking on the showcase sample services.
+* To access Skywalking frontend go to `http://localhost:9999`. You can now explore information collected by Skywalking on the showcase sample services.
+
+> To stop the showcase, you can run `devbox run stop-showcase`.
 
 ## Run agent in dev mode
 
@@ -130,13 +143,12 @@ rectangle "Sample" {
 devbox run agent
 ```
 
-**Note:** The agent is configured by default to connect to `http://localhost:9999` to the Skywalking server and auto trigger the copilot when the application under test is located at `http://localhost:9091`. If you want to try it with another Skywalking instance and application instance change [.env](./.env) file accordingly.
+**Note:** The agent is configured by default to connect to `http://localhost:9999` to the Skywalking server and auto-trigger the copilot when the application under test is located at `http://localhost:9091`. If you want to try it with another Skywalking instance and application instance, change the [.env](./.env) file accordingly.
 
-## Run chrome extension in dev mode
+## Run Chrome extension in dev mode
 
 ```bash
 devbox run browser
 ```
 
-Now if you open a new tab and navigate to the configured application monitored by skywalking (`http://localhost:9091/index.html`) the copilot should automatically activate, and you can start interacting with it.
-
+Now, if you open a new tab and navigate to the configured application monitored by skywalking (`http://localhost:9091/index.html`) the copilot should automatically activate, and you can start interacting with it.
